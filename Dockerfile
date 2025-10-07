@@ -12,7 +12,7 @@ ENV FORCE_CMAKE=1
 # Install llama-cpp-python with CUDA support
 RUN pip install --no-cache-dir llama-cpp-python --force-reinstall --upgrade
 
-# Install required packages
+# Install required packages (ADD huggingface_hub here)
 RUN pip install --no-cache-dir runpod huggingface_hub
 
 # Copy application files
