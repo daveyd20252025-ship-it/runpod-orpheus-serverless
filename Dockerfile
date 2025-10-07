@@ -1,8 +1,9 @@
 FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
 
+# Force rebuild - v2
 WORKDIR /app
 
-# Install build dependencies I guess
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     git \
     cmake \
@@ -12,7 +13,7 @@ RUN apt-get update && apt-get install -y \
 # Clone llama.cpp
 RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
 
-# Build llama.cpp WITH CUDA for RTX 3090/4090 I suppose
+# Build llama.cpp WITH CUDA for RTX 3090/4090
 WORKDIR /app/llama.cpp
 RUN cmake -B build \
     -DGGML_CUDA=ON \
