@@ -15,4 +15,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "-u", "handler.py"]
+CMD ["python", "-u", "runpod_handler.py"]
