@@ -1,24 +1,27 @@
-FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System deps
+RUN apt-get update && apt-get install -y \
+    git build-essential cmake python3 python3-pip python3-venv curl wget pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Clone llama.cpp
+RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
 
-# Set CUDA compile flags
-ENV CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86;89"
-ENV FORCE_CMAKE=1
+# Build llama.cpp CPU backend
+WORKDIR /app/llama.cpp
+RUN cmake -B build -DGGML_CUDA=off -DGGML_HIPBLAS=off && cmake --build build -j$(nproc)
 
-# Install llama-cpp-python with CUDA support
-RUN pip install --no-cache-dir llama-cpp-python --force-reinstall --upgrade
+# Install Python deps
+WORKDIR /app
+RUN pip install --upgrade pip && \
+    pip install runpod requests huggingface-hub
 
-# Install required packages
-RUN pip install --no-cache-dir runpod huggingface_hub
+# Copy handler
+COPY runpod_handler.py /app/
 
-# Copy application files
-COPY . .
-
-# Add a test to verify imports work
-RUN python -c "import huggingface_hub; import runpod; print('Dependencies OK')"
-
-CMD ["python", "-u", "runpod_handler.py"]
+EXPOSE 8000
+CMD ["python3", "runpod_handler.py"]
