@@ -2,7 +2,7 @@ FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
 
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies I guess
 RUN apt-get update && apt-get install -y \
     git \
     cmake \
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 # Clone llama.cpp
 RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
 
-# Build llama.cpp WITH CUDA for RTX 3090/4090
+# Build llama.cpp WITH CUDA for RTX 3090/4090 I suppose
 WORKDIR /app/llama.cpp
 RUN cmake -B build \
     -DGGML_CUDA=ON \
