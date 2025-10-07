@@ -1,13 +1,13 @@
 FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
 
-# Force rebuild - v2
 WORKDIR /app
 
-# Install build dependencies
+# Install ALL build dependencies including cmake
 RUN apt-get update && apt-get install -y \
     git \
     cmake \
     build-essential \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone llama.cpp
@@ -18,8 +18,11 @@ WORKDIR /app/llama.cpp
 RUN cmake -B build \
     -DGGML_CUDA=ON \
     -DCMAKE_CUDA_ARCHITECTURES=86;89 \
-    -DLLAMA_CUDA=ON \
-    && cmake --build build --config Release -j$(nproc)
+    -DLLAMA_CUDA=ON && \
+    cmake --build build --config Release -j$(nproc)
+
+# Verify the binary was created
+RUN ls -la /app/llama.cpp/build/bin/
 
 # Install Python dependencies
 WORKDIR /app
