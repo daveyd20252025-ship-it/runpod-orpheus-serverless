@@ -1,27 +1,30 @@
-FROM ubuntu:22.04
-ENV DEBIAN_FRONTEND=noninteractive
-
-# System deps
-RUN apt-get update && apt-get install -y \
-    git build-essential cmake python3 python3-pip python3-venv curl wget pkg-config && \
-    rm -rf /var/lib/apt/lists/*
+FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
 
 WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Clone llama.cpp
 RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
 
-# Build llama.cpp CPU backend
+# Build llama.cpp WITH CUDA for RTX 3090/4090
 WORKDIR /app/llama.cpp
-RUN cmake -B build -DGGML_CUDA=off -DGGML_HIPBLAS=off && cmake --build build -j$(nproc)
+RUN cmake -B build \
+    -DGGML_CUDA=ON \
+    -DCMAKE_CUDA_ARCHITECTURES=86;89 \
+    -DLLAMA_CUDA=ON \
+    && cmake --build build --config Release -j$(nproc)
 
-# Install Python deps
+# Install Python dependencies
 WORKDIR /app
-RUN pip install --upgrade pip && \
-    pip install runpod requests huggingface-hub
+RUN pip install --no-cache-dir runpod huggingface-hub requests
 
 # Copy handler
 COPY runpod_handler.py /app/
 
-EXPOSE 8000
-CMD ["python3", "runpod_handler.py"]
+CMD ["python", "-u", "runpod_handler.py"]
