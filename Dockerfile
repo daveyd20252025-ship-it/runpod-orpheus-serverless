@@ -2,33 +2,10 @@ FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
 
 WORKDIR /app
 
-# Install ALL build dependencies including cmake
-RUN apt-get update && apt-get install -y \
-    git \
-    cmake \
-    build-essential \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+# Install llama-cpp-python with CUDA support
+ENV CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86;89"
+RUN pip install --no-cache-dir llama-cpp-python runpod huggingface-hub
 
-# Clone llama.cpp
-RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
+COPY handler.py /app/
 
-# Build llama.cpp WITH CUDA for RTX 3090/4090
-WORKDIR /app/llama.cpp
-RUN cmake -B build \
-    -DGGML_CUDA=ON \
-    -DCMAKE_CUDA_ARCHITECTURES=86;89 \
-    -DLLAMA_CUDA=ON && \
-    cmake --build build --config Release -j$(nproc)
-
-# Verify the binary was created
-RUN ls -la /app/llama.cpp/build/bin/
-
-# Install Python dependencies
-WORKDIR /app
-RUN pip install --no-cache-dir runpod huggingface-hub requests
-
-# Copy handler
-COPY runpod_handler.py /app/
-
-CMD ["python", "-u", "runpod_handler.py"]
+CMD ["python", "-u", "handler.py"]
