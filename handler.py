@@ -1,86 +1,57 @@
 import runpod
-import subprocess
-import requests
-import time
-import os
+from llama_cpp import Llama
 from huggingface_hub import hf_hub_download
+import os
 
 MODEL_REPO = "isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF"
 MODEL_FILE = "orpheus-3b-0.1-ft-q4_k_m.gguf"
-MODEL_PATH = f"/models/{MODEL_FILE}"
-PORT = 8000
 
-# Global variable to track if server is initialized
-server_process = None
-server_ready = False
+llm = None
 
-def initialize_server():
-    """Download model and start llama.cpp server (called once on first request)"""
-    global server_process, server_ready
-    
-    if server_ready:
+def init():
+    global llm
+    if llm:
         return
     
-    print("Initializing server...")
-    os.makedirs("/models", exist_ok=True)
+    print("Downloading model from HuggingFace...")
+    model_path = hf_hub_download(
+        repo_id=MODEL_REPO,
+        filename=MODEL_FILE,
+        token=os.getenv("HUGGING_FACE_HUB_TOKEN")
+    )
     
-    if not os.path.exists(MODEL_PATH):
-        print(f"Downloading model from Hugging Face: {MODEL_FILE}")
-        hf_hub_download(repo_id=MODEL_REPO, filename=MODEL_FILE, local_dir="/models")
-        print("Model downloaded successfully")
-    
-    print("Starting llama.cpp server...")
-    server_process = subprocess.Popen([
-        "/app/llama.cpp/build/bin/server",
-        "-m", MODEL_PATH,
-        "--ctx-size", "4096",
-        "--threads", "8",
-        "--host", "0.0.0.0",
-        "--port", str(PORT),
-        "--n-gpu-layers", "99"  # Use GPU for RTX 3090/4090
-    ])
-    
-    # Wait for server to be ready
-    print("Waiting for llama.cpp server to start...")
-    for i in range(30):  # 30 second timeout
-        try:
-            response = requests.get(f"http://127.0.0.1:{PORT}/health", timeout=1)
-            if response.status_code == 200:
-                print("Server is ready!")
-                server_ready = True
-                return
-        except:
-            time.sleep(1)
-    
-    raise Exception("llama.cpp server failed to start in 30 seconds")
+    print(f"Loading model from {model_path}...")
+    llm = Llama(
+        model_path=model_path,
+        n_ctx=4096,
+        n_gpu_layers=-1,
+        n_threads=8,
+        verbose=True
+    )
+    print("Model loaded successfully!")
 
 def handler(event):
-    """RunPod handler function"""
     try:
-        # Initialize on first request (lazy loading)
-        initialize_server()
+        init()
         
-        # Get input text
         input_data = event.get("input", {})
-        text = input_data.get("text", "Hello from Orpheus!")
+        prompt = input_data.get("prompt", "Hello")
+        max_tokens = input_data.get("max_tokens", 256)
+        temperature = input_data.get("temperature", 0.7)
         
-        # Make request to llama.cpp server
-        payload = {
-            "model": "orpheus-3b-0.1-ft-q4_k_m",
-            "messages": [{"role": "user", "content": text}],
-            "max_tokens": 256
-        }
+        print(f"Generating response for prompt: {prompt[:50]}...")
         
-        response = requests.post(
-            f"http://127.0.0.1:{PORT}/v1/chat/completions",
-            json=payload,
-            timeout=60
+        response = llm(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop=["</s>", "\n\n"]
         )
         
-        return {"output": response.json()}
+        return {"output": response["choices"][0]["text"]}
         
     except Exception as e:
+        print(f"Error: {str(e)}")
         return {"error": str(e)}
 
-# Start RunPod serverless
 runpod.serverless.start({"handler": handler})
