@@ -1,59 +1,46 @@
 import runpod
-import subprocess
-import requests
-import time
+from llama_cpp import Llama
 import os
 
 MODEL_PATH = "/root/.cache/huggingface/hub/models--isaiahbjork--orpheus-3b-0.1-ft-Q4_K_M-GGUF/snapshots/af161b11022b996f8ae2f54d79b8ff71c5a3fb58/orpheus-3b-0.1-ft-q4_k_m.gguf"
-SERVER_PORT = 5006
 
-# Start llama.cpp server with RTX 4090 optimizations on import
-print("Starting optimized llama.cpp server...")
-server_process = subprocess.Popen([
-    "/app/llama.cpp/build/bin/server",
-    "-m", MODEL_PATH,
-    "--host", "0.0.0.0",
-    "--port", str(SERVER_PORT),
-    "--ctx-size", "4096",
-    "--gpu-layers", "999",
-    "--batch-size", "512",
-    "--ubatch-size", "128",
-    "--threads", "8",
-    "--threads-batch", "8",
-    "--no-mmap",
-    "--flash-attn",
-    "--repeat-penalty", "1.05",
-    "--top-k", "40",
-    "--top-p", "0.9",
-    "--temp", "0.7",
-    "--log-disable"
-], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-# Wait for server to be ready
-time.sleep(10)
-print("Server ready with flash attention!")
+llm = None
 
 def handler(event):
+    global llm
+    
+    if llm is None:
+        print("Loading model...")
+        llm = Llama(
+            model_path=MODEL_PATH,
+            n_ctx=4096,              # ✅ --ctx-size 4096
+            n_gpu_layers=-1,         # ✅ --gpu-layers 999 (all)
+            n_batch=512,             # ✅ --batch-size 512
+            n_threads=8,             # ✅ --threads 8
+            use_mmap=False,          # ✅ --no-mmap
+            verbose=False
+            # ❌ ubatch-size - not available in Python lib
+            # ❌ threads-batch - not available
+            # ❌ flash-attn - not available
+        )
+        print("Model loaded!")
+    
     try:
         input_data = event.get("input", {})
         prompt = input_data.get("prompt", "")
         max_tokens = input_data.get("max_tokens", 256)
         
-        # Call the llama.cpp server
-        response = requests.post(
-            f"http://localhost:{SERVER_PORT}/completion",
-            json={
-                "prompt": prompt,
-                "n_predict": max_tokens
-            },
-            timeout=60
+        # Generation parameters (per-request)
+        response = llm(
+            prompt, 
+            max_tokens=max_tokens,
+            temperature=0.7,        # ✅ --temp 0.7
+            top_p=0.9,              # ✅ --top-p 0.9
+            top_k=40,               # ✅ --top-k 40
+            repeat_penalty=1.05     # ✅ --repeat-penalty 1.05
         )
         
-        if response.status_code != 200:
-            return {"error": f"Server error: {response.text}"}
-        
-        result = response.json()
-        return {"output": result.get("content", "")}
+        return {"output": response["choices"][0]["text"]}
         
     except Exception as e:
         return {"error": str(e)}
